@@ -52,6 +52,8 @@ class MainActivity : AppCompatActivity() {
             val intent = Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)
             startActivity(intent)
         }
+
+        getWeather()
     }
 
     private fun isPermissionGranted(): Boolean {
@@ -134,6 +136,14 @@ class MainActivity : AppCompatActivity() {
                 arrayOf(android.Manifest.permission.ACCESS_FINE_LOCATION, android.Manifest.permission.ACCESS_COARSE_LOCATION),
                 Constants.REQUEST_CODE_LOCATION
             )
+        }
+    }
+
+    private fun getWeather() {
+        if (Constants.isNetworkAvailable(this)) {
+            Toast.makeText(this@MainActivity, "There's internet connection", Toast.LENGTH_SHORT).show()
+        } else {
+            Toast.makeText(this@MainActivity, "There's no internet connection", Toast.LENGTH_SHORT).show()
         }
     }
 }
