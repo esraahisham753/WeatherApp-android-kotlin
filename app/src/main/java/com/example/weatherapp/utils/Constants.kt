@@ -7,6 +7,9 @@ import android.os.Build
 
 object Constants {
     const val REQUEST_CODE_LOCATION = 123
+    const val BASE_URL = "https://api.open-meteo.com/"
+    const val METRIC_UNIT = "celsius"
+    const val HOURLY = "temperature_2m"
 
     fun isNetworkAvailable(context: Context): Boolean {
         val connectivityManager = context.getSystemService(ConnectivityManager::class.java)

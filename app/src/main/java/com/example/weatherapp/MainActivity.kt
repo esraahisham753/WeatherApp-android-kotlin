@@ -12,6 +12,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.os.Looper
 import android.provider.Settings
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
 import androidx.annotation.RequiresPermission
@@ -26,6 +27,11 @@ import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
+import retrofit2.Call
+import retrofit2.Callback
+import retrofit2.Response
+import retrofit2.Retrofit
+import retrofit2.converter.gson.GsonConverterFactory
 
 class MainActivity : AppCompatActivity() {
     private lateinit var mFusedLocationProviderClient: FusedLocationProviderClient
@@ -52,8 +58,6 @@ class MainActivity : AppCompatActivity() {
             val intent = Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)
             startActivity(intent)
         }
-
-        getWeather()
     }
 
     private fun isPermissionGranted(): Boolean {
@@ -91,6 +95,8 @@ class MainActivity : AppCompatActivity() {
 
                     Toast.makeText(this@MainActivity, "Lat: ${p0.lastLocation?.latitude}, Long: ${p0.lastLocation?.longitude}",
                         Toast.LENGTH_SHORT).show()
+                    val location = p0.lastLocation ?: return
+                    getWeather(p0.lastLocation?.latitude!!, p0.lastLocation?.longitude!!)
                 }
             },
             Looper.myLooper()
@@ -139,9 +145,37 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun getWeather() {
+    private fun getWeather(lat: Double, long: Double) {
         if (Constants.isNetworkAvailable(this)) {
-            Toast.makeText(this@MainActivity, "There's internet connection", Toast.LENGTH_SHORT).show()
+            val retrofit = Retrofit.Builder()
+                .baseUrl(Constants.BASE_URL)
+                .addConverterFactory(GsonConverterFactory.create())
+                .build()
+
+            val serviceAPI = retrofit.create(WeatherServiceAPI::class.java)
+            val call = serviceAPI.getWeatherDetails(lat, long, Constants.METRIC_UNIT, Constants.HOURLY)
+
+            call.enqueue(object : Callback<WeatherResponse> {
+                override fun onResponse(
+                    call: Call<WeatherResponse?>,
+                    response: Response<WeatherResponse?>
+                ) {
+                    if (response.isSuccessful) {
+                        val weather = response.body()
+                        Log.d("WEATHER", weather.toString())
+                    } else {
+                        Toast.makeText(this@MainActivity, "An error occurred", Toast.LENGTH_SHORT).show()
+                    }
+                }
+
+                override fun onFailure(
+                    call: Call<WeatherResponse?>,
+                    t: Throwable
+                ) {
+
+                }
+
+            })
         } else {
             Toast.makeText(this@MainActivity, "There's no internet connection", Toast.LENGTH_SHORT).show()
         }
