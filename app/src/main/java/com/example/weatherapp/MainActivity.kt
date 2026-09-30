@@ -59,6 +59,15 @@ class MainActivity : AppCompatActivity() {
     private lateinit var cardDaily: View
     private lateinit var statsGrid: GridLayout
 
+    // --- State used by the onResume retry logic ---
+    private var hasData = false              // weather already displayed
+    private var isLocating = false           // waiting for a GPS/network fix
+    private var isFetching = false           // API call in flight
+    private var awaitingPermission = false   // system permission dialog showing
+    private var permissionDenied = false     // user denied during this session
+    private var settingsLaunched = false     // location-settings screen already opened
+    private var locationCallback: LocationCallback? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -75,17 +84,48 @@ class MainActivity : AppCompatActivity() {
         bindViews()
 
         mFusedLocationProviderClient = LocationServices.getFusedLocationProviderClient(this)
+    }
 
-        if (isLocationEnabled()) {
-            if (isPermissionGranted()) {
-                requestLocationData()
-            } else {
-                requestPermissions()
-            }
-        } else {
+    override fun onResume() {
+        super.onResume()
+        // Runs on first launch AND when returning from any settings screen
+        loadWeatherIfNeeded()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        // Cancel a pending location request so onResume can cleanly start a new one
+        if (isLocating) {
+            locationCallback?.let { mFusedLocationProviderClient.removeLocationUpdates(it) }
+            locationCallback = null
+            isLocating = false
+        }
+    }
+
+    private fun loadWeatherIfNeeded() {
+        if (hasData || isLocating || isFetching || awaitingPermission) return
+
+        if (!isLocationEnabled()) {
             showLoading(false)
             tvCondition.text = "Turn on location to see the weather"
-            startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS))
+            // Open settings only once, otherwise returning without enabling would loop
+            if (!settingsLaunched) {
+                settingsLaunched = true
+                startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS))
+            }
+            return
+        }
+        settingsLaunched = false
+
+        if (isPermissionGranted()) {
+            permissionDenied = false
+            requestLocationData()
+        } else if (permissionDenied) {
+            // Already denied this session: don't re-prompt on every resume
+            showLoading(false)
+            tvCondition.text = "Location permission is required"
+        } else {
+            requestPermissions()
         }
     }
 
@@ -126,31 +166,43 @@ class MainActivity : AppCompatActivity() {
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
 
-        if (requestCode == Constants.REQUEST_CODE_LOCATION && isPermissionGranted()) {
-            requestLocationData()
+        if (requestCode != Constants.REQUEST_CODE_LOCATION) return
+        awaitingPermission = false
+
+        if (isPermissionGranted()) {
+            permissionDenied = false
+            if (!isLocating && !isFetching && !hasData) requestLocationData()
         } else {
+            permissionDenied = true
             showLoading(false)
             tvCondition.text = "Location permission is required"
             Toast.makeText(this, "Permission denied", Toast.LENGTH_SHORT).show()
+            showAlertDialog()
         }
     }
 
     @SuppressLint("MissingPermission")
     private fun requestLocationData() {
+        isLocating = true
         showLoading(true)
 
         val locationRequest = LocationRequest.Builder(Priority.PRIORITY_BALANCED_POWER_ACCURACY, 1000)
             .setMaxUpdates(1)
             .build()
 
+        val callback = object : LocationCallback() {
+            override fun onLocationResult(result: LocationResult) {
+                val location = result.lastLocation ?: return
+                isLocating = false
+                locationCallback = null
+                getWeather(location.latitude, location.longitude)
+            }
+        }
+        locationCallback = callback
+
         mFusedLocationProviderClient.requestLocationUpdates(
             locationRequest,
-            object : LocationCallback() {
-                override fun onLocationResult(result: LocationResult) {
-                    val location = result.lastLocation ?: return
-                    getWeather(location.latitude, location.longitude)
-                }
-            },
+            callback,
             Looper.getMainLooper()
         )
     }
@@ -182,8 +234,11 @@ class MainActivity : AppCompatActivity() {
         if (ActivityCompat.shouldShowRequestPermissionRationale(this, Manifest.permission.ACCESS_FINE_LOCATION)
             || ActivityCompat.shouldShowRequestPermissionRationale(this, Manifest.permission.ACCESS_COARSE_LOCATION)
         ) {
+            showLoading(false)
+            tvCondition.text = "Location permission is required"
             showAlertDialog()
         } else {
+            awaitingPermission = true
             ActivityCompat.requestPermissions(
                 this,
                 arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION),
@@ -200,6 +255,8 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
+        isFetching = true
+
         val retrofit = Retrofit.Builder()
             .baseUrl(Constants.BASE_URL)
             .addConverterFactory(GsonConverterFactory.create())
@@ -212,8 +269,10 @@ class MainActivity : AppCompatActivity() {
 
         call.enqueue(object : Callback<WeatherResponse> {
             override fun onResponse(call: Call<WeatherResponse>, response: Response<WeatherResponse>) {
+                isFetching = false
                 val weather = response.body()
                 if (response.isSuccessful && weather != null) {
+                    hasData = true
                     displayWeather(weather)
                 } else {
                     showLoading(false)
@@ -222,6 +281,7 @@ class MainActivity : AppCompatActivity() {
             }
 
             override fun onFailure(call: Call<WeatherResponse>, t: Throwable) {
+                isFetching = false
                 showLoading(false)
                 Toast.makeText(this@MainActivity, "Failed to load weather: ${t.localizedMessage}", Toast.LENGTH_LONG).show()
             }
