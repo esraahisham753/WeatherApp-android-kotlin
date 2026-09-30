@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/hourRoot"
+    android:layout_width="64dp"
+    android:layout_height="wrap_content"
+    android:layout_marginStart="3dp"
+    android:layout_marginEnd="3dp"
+    android:gravity="center_horizontal"
+    android:orientation="vertical"
+    android:paddingTop="10dp"
+    android:paddingBottom="10dp">
+
+    <TextView
+        android:id="@+id/tvHourTemp"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="--°"
+        android:textColor="@color/white"
+        android:textSize="16sp"
+        android:textStyle="bold" />
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="80dp"
+        android:layout_marginTop="8dp"
+        android:layout_marginBottom="8dp">
+
+        <View
+            android:id="@+id/viewHourBar"
+            android:layout_width="6dp"
+            android:layout_height="40dp"
+            android:layout_gravity="center_horizontal|bottom"
+            android:background="@drawable/bg_bar" />
+    </FrameLayout>
+
+    <TextView
+        android:id="@+id/tvHourTime"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:alpha="0.8"
+        android:text="00:00"
+        android:textColor="@color/white"
+        android:textSize="12sp" />
+</LinearLayout>
